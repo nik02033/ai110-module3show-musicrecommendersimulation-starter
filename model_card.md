@@ -1,53 +1,63 @@
 # Model Card: Music Recommender Simulation
 
-## 1. Model Name  
+## Model Name
 
-**VibeMatch CLI** — a tiny content-based recommender that ranks songs from a CSV using genre, mood, energy, valence, and a simple acoustic preference.
-
----
-
-## 2. Intended Use  
-
-This tool suggests up to five songs from a fixed classroom catalog based on a short taste profile (genre, mood, target energy, valence, and whether the user likes acoustic sounds). It assumes the user can describe what they want in those labels and numbers. It is for learning and demos only, not for real listeners or production traffic.
+**VibeFinder 1.0** — a small classroom recommender that ranks songs from a CSV using taste tags and a few numbers.
 
 ---
 
-## 3. How the Model Works  
+## Goal / Task
 
-For each song, the program adds points when the genre matches, when the mood matches, and when the song's energy and valence sit close to what the user asked for. It also adds a small bonus if the song's acousticness lines up with whether the user said they like acoustic or produced tracks. Everything is added into one score per song; then the songs are sorted so the highest scores float to the top. The experiment mode in Phase 4 only changes how much genre versus energy counts; the idea stays the same.
-
----
-
-## 4. Data  
-
-The catalog has **20** songs in `data/songs.csv`, including pop, lofi, rock, jazz, ambient, synthwave, hip-hop, classical, metal, country, r&b, edm, reggae, blues, folk, trap, and indie pop. Moods include happy, chill, intense, focused, moody, hype, peaceful, angry, and others. Extra rows were added after the starter so genres like classical and blues show up. The set is still tiny: many real-world niches (K-pop, gospel, hyperpop) are missing, so some users never get a true genre match.
+The system tries to **suggest which songs in the catalog best fit a user’s profile**. It does not predict plays or skips from real behavior. It only scores each track against things like favorite genre, mood, target energy, and valence, then returns the top matches.
 
 ---
 
-## 5. Strengths  
+## Data Used
 
-It behaves sensibly when the profile lines up with the data. **Chill lofi** profiles reliably surface the lofi chill tracks. **High-energy pop** keeps Sunrise City and other pop picks near the top. **Intense rock** pulls Storm Runner first. The printed reasons make it easy to see why a song scored well, which is good for debugging and for explaining results to someone who does not code.
-
----
-
-## 6. Limitations and Bias  
-
-The scorer cannot resolve conflicting signals. In testing, a profile that asked for **pop**, **melancholic** mood, but **very high energy** still ranked **Gym Hero** (pop, intense, happy-ish valence) above actual sad or mellow tracks, because genre and energy points drowned out the missing mood match. That is a form of **filter bubble**: the system keeps favoring loud pop whenever pop and high energy are both set, even when the mood label does not fit how someone actually feels. The catalog also has only one **melancholic** song (blues), so sad taste has almost nowhere to go. Energy is always a distance score, not higher is better, so a user who wants calm music is not accidentally pushed toward loud tracks—but if they mismatch genre and mood on purpose, the model has no way to complain. Finally, **indie pop** is not the same string as **pop**, so users who think of them as the same family still miss the genre bonus unless we normalize labels.
+There are **20 songs** in `data/songs.csv`. Each row has **genre, mood, energy, tempo (bpm), valence, danceability, and acousticness**. Genres range from pop and lofi to classical, blues, and trap, but the list is still small. Many real genres and moods are missing, so some users never get a clean genre match. **Indie pop** and **pop** are different strings, which trips up matching if we do not normalize labels.
 
 ---
 
-## 7. Evaluation  
+## Algorithm Summary
 
-I stress-tested **four** profiles in `src/main.py`: **High-Energy Pop**, **Chill Lofi**, **Deep Intense Rock**, and an **adversarial** profile (pop + melancholic mood + club-level energy). The first three mostly matched my intuition. The adversarial one was the eye-opener: **Gym Hero** jumped to number one even though the mood was wrong, which showed how strong the genre and energy rails are. I also ran `python -m src.main --experiment-weights`, which cuts genre weight in half and doubles energy weight. For High-Energy Pop the **order of the top songs did not change**, but the **gaps between scores** grew on the energy line—so the list looked similar even though the math shifted. Full narrative comparisons live in **`reflection.md`**.
-
----
-
-## 8. Future Work  
-
-Normalize genre aliases (e.g. map indie pop toward pop when the user says pop). Add a **penalty** or cap when mood and valence disagree badly with the track. Pull in **diversity**: after the best match, require the next pick to differ in genre or artist. Support **skips** or **soft** preferences instead of one hard favorite genre.
+Each song gets **points** that add up to one score. **Genre match** adds the most. **Mood match** adds a smaller chunk. **Energy** and **valence** use “closeness”: the nearer the song is to what you asked, the more points. There is a small **acoustic vs produced** bonus if the song matches that preference. After every song has a score, the program **sorts high to low** and shows the top few. A separate run can **lower genre weight and raise energy weight** to see how sensitive the list is.
 
 ---
 
-## 9. Personal Reflection  
+## Observed Behavior / Biases
 
-Building this made it obvious why apps blend **content** features with **what similar people played**. Our toy model only sees tags and numbers, so it happily recommends a hyped workout pop track to someone who said they felt melancholic, as long as pop and high energy still match. That is a good reminder that **Gym Hero** can keep appearing—not because the code loves that song, but because the **rules** and **weights** say loud pop near your target energy wins. Human judgment still has to decide if that output is emotionally right.
+When someone asked for **pop**, **melancholic** mood, and **very high energy**, **Gym Hero** still won. Genre and energy mattered more than mood, and there is almost no melancholic pop in the data. So the system can **feel loud and “wrong”** even when it is following the math. That is a **filter bubble** risk: the same kind of track keeps winning if your weights favor genre and hype.
+
+---
+
+## Evaluation Process
+
+I ran **`python -m src.main`** with four profiles: high-energy pop, chill lofi, deep intense rock, and an edge case (sad mood + club energy). The first three mostly matched intuition. The edge case exposed the bias above. I also ran **`--experiment-weights`** (halve genre, double energy). Top order often stayed the same, but **energy** mattered more in the printed reasons. I compared runs side by side in the terminal and wrote short notes in `reflection.md`.
+
+---
+
+## Intended Use and Non-Intended Use
+
+**Intended:** Learning how recommenders turn **features + rules** into a ranked list. Demos in class, debugging scoring, and talking through tradeoffs with plain-language reasons.
+
+**Not intended:** Real streaming products, personalized playlists for paying users, or any decision that should rely on fairness, diversity, or listening history. It does not know what you actually played, skipped, or liked.
+
+---
+
+## Ideas for Improvement
+
+1. **Group similar genres** (e.g. treat indie pop like pop when the user says pop).  
+2. **Penalize** big mood or valence mismatches so sad requests do not always lose to loud pop.  
+3. **Force variety** in the top five (different artists or genres after the first pick).
+
+---
+
+## Personal Reflection
+
+My biggest learning moment was the **adversarial profile**: the output looked silly emotionally, but the code was doing exactly what we weighted. That split between “correct math” and “good vibe” stuck with me.
+
+**AI tools** helped me draft scoring ideas and boilerplate fast. I still had to **double-check** weights, CSV fields, and whether explanations matched the numbers—models can sound confident when the logic is wrong.
+
+It surprised me that **adding and sorting** could still *feel* like a real recommender when the profiles matched the data. The reasons list made that illusion break in a useful way when things went off the rails.
+
+**If I extended the project**, I would add real **skip/like** simulation or collaborative-style “users like you” on top of content scores, and a **diversity** rule so Gym Hero does not dominate every nearby profile.

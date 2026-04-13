@@ -11,7 +11,7 @@ Your goal is to:
 - Evaluate what your system gets right and wrong
 - Reflect on how this mirrors real world AI recommenders
 
-This simulator builds a content-based music recommender that matches songs to a user's taste profile using features like genre, mood, energy, and valence. Given a user's preferences, it scores every song in the catalog and returns the top matches — no behavioral data or other users needed.
+This simulator (**VibeFinder 1.0**) builds a content-based music recommender that matches songs to a user's taste profile using features like genre, mood, energy, and valence. Given a user's preferences, it scores every song in the catalog and returns the top matches — no behavioral data or other users needed.
 
 ---
 
@@ -193,11 +193,9 @@ Read and complete `model_card.md` and the profile comparison notes in **`reflect
 
 [**Model Card**](model_card.md) · [**Reflection (profile pairs)**](reflection.md)
 
-Write 1 to 2 paragraphs here about what you learned:
+Recommenders turn **labeled taste + numeric features** into a ranked list by adding weighted points—there is no magic, just rules you chose. This project made that visible: the same song can rank high for different “wrong” reasons if genre and energy overpower mood.
 
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
-
+Bias shows up when the **catalog is tiny**, labels do not line up with how people talk about music, or **one feature is worth too much**. Our edge-case profile (melancholic but high energy) surfaced that: the system favored loud pop because the math rewarded genre and energy more than a missing mood match. Real apps add behavior data and guardrails; ours is a deliberate simplification. Full write-up: **[model_card.md](model_card.md)** (including process reflection and non-intended use).
 
 ---
 
