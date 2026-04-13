@@ -11,23 +11,126 @@ Your goal is to:
 - Evaluate what your system gets right and wrong
 - Reflect on how this mirrors real world AI recommenders
 
-Replace this paragraph with your own summary of what your version does.
+This simulator builds a content-based music recommender that matches songs to a user's taste profile using features like genre, mood, energy, and valence. Given a user's preferences, it scores every song in the catalog and returns the top matches — no behavioral data or other users needed.
 
 ---
 
 ## How The System Works
 
-Explain your design in plain language.
+Real music platforms like Spotify figure out what you'll like in two main ways. The first is collaborative filtering — it watches what millions of other users do and notices patterns like "people who liked these 10 songs also tend to play this one." No one manually told it anything; it just picked up on behavior (skips, replays, playlist saves). The second is content-based filtering — it looks at the actual attributes of songs you liked (fast tempo, high energy, happy mood) and finds other songs that match that same profile. Our simulator takes the content-based approach, which means it doesn't need any other users' data — it just needs to know what the person likes and compare that against song features.
 
-Some prompts to answer:
+**What each `Song` tracks:**
+- `genre` — the broad category (pop, lofi, rock, jazz, ambient, synthwave, indie pop)
+- `mood` — the emotional tone (happy, chill, intense, relaxed, focused, moody)
+- `energy` — how high-powered the song feels (0.0 = very calm, 1.0 = full throttle)
+- `valence` — how musically "bright" or positive the song sounds (0.0 = dark, 1.0 = uplifting)
+- `tempo_bpm` — beats per minute, basically how fast it moves
+- `acousticness` — how organic/unplugged it sounds vs electronic/produced
+- `danceability` — how much it makes you want to move
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+**What the `UserProfile` stores:**
+- `favorite_genre` — the genre they prefer most
+- `favorite_mood` — the mood they're looking for right now
+- `target_energy` — a number between 0 and 1 for how energetic they want the music
+- `likes_acoustic` — whether they lean toward acoustic or produced sounds
 
-You can include a simple diagram or bullet list if helpful.
+**How the `Recommender` scores each song:**
+
+Genre and mood use a simple match — you either match or you don't, and matching genre gets the highest bonus (worth 2 points) since most people have hard genre preferences. Mood match adds 1.0 point. For numerical features like energy and valence, we use a proximity formula: the closer the song's value is to what the user wants, the higher it scores. A song with energy 0.82 scores higher than one at 0.4 for a user who wants 0.8. Each feature gets a weight that reflects how much it matters.
+
+**How we pick what to recommend:**
+
+Every song in the catalog gets scored against the user profile. Then we sort all those scores from highest to lowest and return the top 5. That's the ranking step — the scoring rule tells us how good each song is, and the ranking rule decides which ones actually get shown.
+
+**Features used in the simulation:**
+
+| Feature | Type | Used for |
+|---|---|---|
+| `genre` | categorical | +2.0 pts if match |
+| `mood` | categorical | +1.0 pts if match |
+| `energy` | numerical | `(1 - \|target - value\|) × 1.5` |
+| `valence` | numerical | `(1 - \|target - value\|) × 0.5` |
+| `acousticness` | threshold | +0.5 bonus if preference aligns |
+
+---
+
+## Algorithm Recipe
+
+This is the exact formula the recommender uses to score each song:
+
+```
+score = 0
+
+if song.genre == user.favorite_genre  →  score += 2.0
+if song.mood  == user.favorite_mood   →  score += 1.0
+
+energy_proximity  = 1.0 - |user.target_energy  - song.energy|
+valence_proximity = 1.0 - |user.target_valence - song.valence|
+
+score += energy_proximity  × 1.5
+score += valence_proximity × 0.5
+
+if acoustic preference aligns with song.acousticness  →  score += 0.5
+```
+
+**Why these weights?**
+
+- Genre gets the highest weight (2.0) because it's the hardest boundary — most people won't enjoy heavy metal just because the energy level matches what they wanted from pop.
+- Energy gets 1.5 because it's the most immediately felt quality — a sleepy song in the wrong genre still feels wrong.
+- Mood (1.0) is softer than genre. Sometimes you're in a "chill" mood regardless of genre.
+- Valence (0.5) is a subtle supporting signal. It fine-tunes which song within a genre cluster rises to the top.
+- Acoustic is a small bonus rather than a scored feature — it's more of a tiebreaker.
+
+**Data flow — how a song goes from CSV to recommendation:**
+
+```mermaid
+flowchart TD
+    A["User Profile\ngenre · mood · energy · valence"] --> B["Load Catalog\ndata/songs.csv  →  20 songs"]
+    B --> C{"For each song\nin catalog"}
+    C --> D["Score Song\n+2.0 genre match\n+1.0 mood match\n+energy proximity × 1.5\n+valence proximity × 0.5\n+0.5 acoustic bonus"]
+    D --> E["Attach score to song"]
+    E --> C
+    C -->|"All songs scored"| F["Sort by score\nhigh → low"]
+    F --> G["Return Top K songs"]
+    G --> H["Display with explanations"]
+```
+
+**Potential biases to watch for:**
+
+- Genre dominance — because genre is worth 2.0 points, a perfect genre match with mediocre energy will almost always beat a great energy match in the wrong genre. This could bury genuinely good songs.
+- Mood narrowness — the current catalog has only a handful of moods, so a user who wants "romantic" gets zero mood-match bonus on most songs.
+- Acoustic skew — the bonus only fires at extremes (≥0.6 or ≤0.3), so mid-range acoustic songs never get the bump even if they'd feel right.
+- Catalog blind spots — 10 of the 20 songs are pop, lofi, or rock-adjacent. Users who like classical, reggae, or blues will almost always see weaker top scores simply because fewer songs match their genre.
+
+---
+
+## CLI sample output
+
+Run from the project root: `python -m src.main`. You should see `Loaded songs:` followed by the default **pop / happy** profile and the top picks with **scores** and **reasons** (each line shows what points were earned). For submissions that ask for a screenshot, capture your own terminal and replace or add an image here.
+
+```
+Loaded songs: 20
+
+==========================================================
+  Music Recommender — CLI (default profile)
+==========================================================
+
+  Profile: pop / happy  |  energy 0.8  |  valence 0.85
+  ----------------------------------------------------
+
+  1. Sunrise City
+     Neon Echo  ·  pop  ·  happy
+     Final score: 5.46
+     Reasons:
+       • genre match (+2.0)
+       • mood match (+1.0)
+       • energy proximity (+1.47) — target 0.80, song 0.82
+       • valence proximity (+0.495) — target 0.85, song 0.84
+       • produced/electric preference aligned (+0.5)
+ ...
+```
+
+**Sorting note:** `recommend_songs` uses `sorted(...)` on a new list of scored rows so the original `songs` catalog is never reordered. Mutating with `.sort()` would sort in place on that working list only — both approaches work; `sorted()` makes it obvious we are building a ranking copy.
 
 ---
 
